@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TF-IDF 기반 상품 리뷰 종합 분석기 (고1 수학 탐구용)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Noto Sans KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans KR', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f8fafc;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .hashtag-badge {
+            transition: all 0.2s ease-in-out;
+        }
+        .hashtag-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col antialiased">
+
+    <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-md shadow-sky-500/20">
+                    <i class="fa-solid fa-calculator text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight flex items-center gap-2">
+                        TF-IDF 상품 리뷰 종합 분석기
+                        <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">고1 수학 탐구용 (단순역수 IDF)</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">로그 대신 비율과 역수($IDF = N / df$) 개념을 적용한 단어 가중치 분석 도구</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button onclick="clearAllData()" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-left"></i> 전체 초기화
+                </button>
+                <button onclick="runAnalysis()" class="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-md shadow-sky-600/30 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-play"></i> 분석 재실행
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <section class="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 rounded-2xl p-5 border border-amber-200/90 text-slate-800 space-y-3 shadow-sm">
+            <div class="flex justify-between items-center border-b border-amber-200/80 pb-2.5">
+                <h2 class="font-bold text-amber-900 text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-graduation-cap text-amber-600 text-base"></i>
+                    [고1 수학 탐구보고서용] 적용 모델 수식 가이드
+                </h2>
+                <span class="text-[11px] bg-amber-200/70 text-amber-900 px-3 py-0.5 rounded-full font-semibold">로그 미사용 · 비율과 역수</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div class="bg-white/90 p-3.5 rounded-xl border border-amber-200 shadow-xs space-y-1">
+                    <span class="font-bold text-amber-900 block border-b border-amber-100 pb-1">1. 단어 출현 비율 (DF 비율)</span>
+                    <p class="text-slate-600 text-[11px] pt-1">전체 $N$개 리뷰 중 해당 단어가 등장한 리뷰의 비율</p>
+                    <div class="bg-slate-50 p-2 rounded text-center font-mono font-bold text-slate-700">
+                        $$\text{출현 비율} = \frac{df}{N}$$
+                    </div>
+                </div>
+
+                <div class="bg-white/90 p-3.5 rounded-xl border border-amber-200 shadow-xs space-y-1">
+                    <span class="font-bold text-amber-900 block border-b border-amber-100 pb-1">2. 단순 역수 IDF (희소성 가중치)</span>
+                    <p class="text-slate-600 text-[11px] pt-1">비율의 역수를 취하여 희소할수록 큰 가중치 부여</p>
+                    <div class="bg-slate-50 p-2 rounded text-center font-mono font-bold text-sky-700">
+                        $$\text{단순 역수 IDF} = \frac{N}{df}$$
+                    </div>
+                </div>
+
+                <div class="bg-white/90 p-3.5 rounded-xl border border-amber-200 shadow-xs space-y-1">
+                    <span class="font-bold text-amber-900 block border-b border-amber-100 pb-1">3. 최종 가중치 (TF-IDF 점수)</span>
+                    <p class="text-slate-600 text-[11px] pt-1">단어의 총 출현 빈도(TF)와 역수 가중치의 곱 연산</p>
+                    <div class="bg-slate-50 p-2 rounded text-center font-mono font-bold text-indigo-700">
+                        $$\text{최종 점수} = \text{TF} \times \left(\frac{N}{df}\right)$$
+                    </div>
+                </div>
+            </div>
+            <p class="text-[11px] text-amber-800/90 leading-relaxed">
+                💡 <strong>보고서 설명 팁:</strong> "모든 리뷰에 상투적으로 등장하는 일반 단어는 $df$가 $N$에 가까워져 역수 가중치($N/df$)가 1에 가까워지지만, 특정 상품의 핵심 장점이나 치명적 단점처럼 일부 리뷰에만 집중되는 키워드는 $df$가 작아져 역수 가중치가 커집니다. 이를 통해 주요 해시태그를 효과적으로 도출합니다."
+            </p>
+        </section>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+                    <i class="fa-solid fa-folder-open text-sky-500"></i> 샘플 데이터셋:
+                </span>
+                <button onclick="loadPreset('electronics')" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-700 border border-slate-200 transition flex items-center gap-1.5">
+                    🎧 [전자제품] 무선 이어폰
+                </button>
+                <button onclick="loadPreset('fashion')" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-700 border border-slate-200 transition flex items-center gap-1.5">
+                    🧥 [패션/의류] 겨울 의류
+                </button>
+                <button onclick="loadPreset('food')" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-700 border border-slate-200 transition flex items-center gap-1.5">
+                    🍕 [식품/밀키트] 밀키트 10선
+                </button>
+                <!-- 100% Negative Preset Button -->
+                <button onclick="loadPreset('bad_quality')" class="px-3 py-1.5 text-xs font-extrabold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 transition flex items-center gap-1.5 shadow-xs">
+                    😡 [100% 완전 부정] 최악의 품질 & 환불 모음
+                </button>
+            </div>
+
+            <!-- Live Stats -->
+            <div class="flex items-center space-x-4 text-xs flex-wrap gap-y-1">
+                <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
+                    <span class="text-slate-500">총 리뷰 수 ($N$):</span>
+                    <strong id="stat-review-count" class="text-sky-700 font-extrabold text-sm">0개</strong>
+                </div>
+                <div class="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span class="text-slate-500">총 글자 수:</span>
+                    <strong id="stat-char-count" class="text-emerald-700 font-bold text-sm">0자</strong>
+                </div>
+                <div class="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    <span class="text-slate-500">평균 글자 수:</span>
+                    <strong id="stat-avg-char" class="text-amber-700 font-bold text-sm">0자</strong>
+                </div>
+                <div class="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                    <span class="text-slate-500">등록 불용어:</span>
+                    <strong id="stat-stopword-count" class="text-indigo-700 font-bold text-sm">0개</strong>
+                </div>
+            </div>
+        </div>
+
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+            <div class="flex justify-between items-center flex-wrap gap-2 border-b border-slate-100 pb-3">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-filter text-indigo-500"></i> 사용자 맞춤 불용어(분석 제외 단어) 설정
+                    </h2>
+                    <p class="text-xs text-slate-500">분석 결과에서 제외하고 싶은 무의미한 조사, 부사, 상투어를 직접 등록하거나 삭제하세요.</p>
+                </div>
+                <button onclick="resetDefaultStopwords()" class="px-3 py-1 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition border border-slate-200">
+                    <i class="fa-solid fa-rotate-left"></i> 기본 불용어 목록 복원
+                </button>
+            </div>
+
+            <!-- Stopwords Input -->
+            <div class="flex items-center gap-2">
+                <input type="text" id="stopword-input" onkeydown="if(event.key==='Enter'){addCustomStopword();}" placeholder="제외할 단어 입력 후 엔터 (예: 진짜, 너무, 그리고, 정말)" class="px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none flex-grow max-w-md bg-slate-50">
+                <button onclick="addCustomStopword()" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-plus"></i> 불용어 추가
+                </button>
+                <span id="stopword-toast" class="text-xs font-medium text-emerald-600 hidden transition-all"></span>
+            </div>
+
+            <!-- Active Stopwords Tags -->
+            <div class="space-y-1.5 pt-1">
+                <span class="text-[11px] font-semibold text-slate-400">현재 등록된 불용어 목록 (태그 클릭 시 삭제):</span>
+                <div id="stopword-tags-container" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                    <!-- Dynamic Stopword Badges -->
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="bg-slate-50 border-b border-slate-200 px-5 py-3 flex justify-between items-center flex-wrap gap-2">
+                <div class="flex space-x-1">
+                    <button id="input-mode-bulk-btn" onclick="switchInputMode('bulk')" class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-sky-600 text-white transition flex items-center gap-1.5 shadow-xs">
+                        <i class="fa-solid fa-align-left"></i> 일괄 텍스트 입력 (줄바꿈 구분)
+                    </button>
+                    <button id="input-mode-single-btn" onclick="switchInputMode('single')" class="px-3.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:bg-slate-200/70 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-list-check"></i> 개별 리뷰 등록/수정/삭제
+                    </button>
+                </div>
+                <span class="text-[11px] text-slate-400">
+                    <i class="fa-solid fa-pen-to-square"></i> 리뷰를 자유롭게 편집한 후 [분석 재실행] 버튼을 누르면 즉시 반영됩니다.
+                </span>
+            </div>
+
+            <div class="p-5">
+                <!-- Bulk Input Mode -->
+                <div id="input-mode-bulk" class="space-y-3">
+                    <div class="flex justify-between items-center text-xs text-slate-500 font-medium">
+                        <label for="bulk-textarea" class="flex items-center gap-1 text-slate-700 font-bold">
+                            리뷰를 한 줄에 하나씩 입력해 주세요 (엔터 키로 개별 리뷰 구분):
+                        </label>
+                        <span id="bulk-line-count" class="text-sky-600 font-bold">0 줄 ($N = 0$개)</span>
+                    </div>
+                    <textarea id="bulk-textarea" rows="7" oninput="handleBulkInputProcess()" placeholder="여기에 상품 리뷰를 여러 줄 입력하세요.&#10;예시:&#10;조리법이 간단해서 15분 만에 만들었어요. 소스 맛이 깊어서 만족스럽습니다.&#10;배송은 진짜 빠르고 야채 상태도 아삭아삭 신선했어요.&#10;전체적인 맛은 좋은데 성인 2명이 먹기엔 고기 양이 적고 조금 짜서 아쉬워요." class="w-full p-3.5 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none custom-scrollbar leading-relaxed bg-white"></textarea>
+                    
+                    <div class="flex justify-between items-center pt-1">
+                        <p class="text-[11px] text-slate-400">줄바꿈 하나당 1개의 개별 리뷰 문서($N$)로 취급됩니다.</p>
+                        <button onclick="applyBulkTextToReviews()" class="px-4 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-md transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-arrows-rotate"></i> 데이터 적용 및 분석 실행
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Single Item Mode -->
+                <div id="input-mode-single" class="hidden space-y-5">
+                    <form onsubmit="handleSingleReviewSubmit(event)" class="bg-slate-50 p-4 rounded-xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                        <input type="hidden" id="editing-review-index" value="-1">
+                        <div class="sm:col-span-3">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">작성자</label>
+                            <input type="text" id="single-author" required placeholder="예: 구매자A" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none bg-white">
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">평점 (1~5점)</label>
+                            <select id="single-rating" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none bg-white">
+                                <option value="5">★★★★★ (5점 - 매우만족)</option>
+                                <option value="4">★★★★☆ (4점 - 만족)</option>
+                                <option value="3">★★★☆☆ (3점 - 보통)</option>
+                                <option value="2">★★☆☆☆ (2점 - 아쉬움)</option>
+                                <option value="1">★☆☆☆☆ (1점 - 불만족)</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-4">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">리뷰 내용</label>
+                            <input type="text" id="single-content" required placeholder="리뷰 내용을 입력하세요." class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none bg-white">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <button type="submit" id="single-submit-btn" class="w-full py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-lg shadow transition">
+                                <i class="fa-solid fa-plus"></i> 리뷰 등록
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-xs text-slate-500">
+                            <span class="font-bold text-slate-700">등록된 리뷰 목록 (<span id="single-list-count">0</span>개)</span>
+                            <span class="text-[11px]">개별 항목을 수정하거나 삭제할 수 있습니다.</span>
+                        </div>
+                        <div id="single-reviews-container" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                            <!-- Dynamic Items -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden border border-sky-900/40 space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <h2 class="text-base font-bold tracking-tight text-sky-100 flex items-center gap-2">
+                        <i class="fa-solid fa-hashtag text-sky-400"></i> 상품 결론 요약 (자동 생성 해시태그)
+                    </h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="text-right">
+                        <span class="text-[10px] text-slate-400 block">종합 만족도/추천 점수</span>
+                        <span id="overall-score-badge" class="text-sm font-extrabold text-amber-300">0.0 / 5.0</span>
+                    </div>
+                    <span id="product-title-badge" class="text-xs font-semibold px-3 py-1 bg-slate-800 text-sky-300 rounded-full border border-sky-500/30">
+                        분석 실행 결과
+                    </span>
+                </div>
+            </div>
+
+            <!-- Hashtag Badges -->
+            <div class="space-y-2">
+                <p class="text-xs text-slate-400">가중치($TF \times N/df$)가 높게 산출된 상위 키워드 해시태그 (클릭 시 해당 키워드 검색):</p>
+                <div id="hashtag-container" class="flex flex-wrap gap-2 pt-1">
+                    <!-- Dynamic Hashtag Badges -->
+                </div>
+            </div>
+
+            <!-- Summary Narrative Box -->
+            <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs text-slate-200 leading-relaxed flex items-start gap-3">
+                <i class="fa-solid fa-robot text-sky-400 text-lg mt-0.5 flex-shrink-0"></i>
+                <div class="space-y-1.5 w-full">
+                    <p id="ai-summary-text" class="font-medium text-slate-100 text-xs sm:text-sm">
+                        리뷰 데이터를 입력한 후 [분석 재실행] 버튼을 누르세요.
+                    </p>
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-700/60">
+                        <span id="ai-summary-subtext">단순 역수 모델: $TF \times (N / df)$</span>
+                        <span id="sentiment-ratio-text" class="font-semibold text-slate-300">긍정 0% | 부정 0%</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="flex border-b border-slate-200 space-x-2 overflow-x-auto custom-scrollbar">
+            <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="px-4 py-2.5 text-sm font-semibold border-b-2 border-sky-600 text-sky-600 transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-chart-column"></i> 가중치 시각화 차트
+            </button>
+            <button onclick="switchTab('table')" id="tab-btn-table" class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-table"></i> 수치 세부 데이터표 ($TF, df, N/df$)
+            </button>
+            <button onclick="switchTab('reviews')" id="tab-btn-reviews" class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-highlighter"></i> 리뷰 내 키워드 하이라이팅
+            </button>
+        </div>
+
+        <div id="tab-content-dashboard" class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Bar Chart -->
+                <div class="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-chart-bar text-sky-500"></i>
+                                상위 키워드 가중치 점수 [$TF \times (N / df)$]
+                            </h3>
+                            <p class="text-xs text-slate-500">단순 역수 가중치가 가장 높게 도출된 Top 10 주요 키워드</p>
+                        </div>
+                        <span class="text-[11px] font-semibold px-2 py-1 bg-sky-50 text-sky-700 rounded-md">Simple Ratio Model</span>
+                    </div>
+                    <div class="h-72 relative">
+                        <canvas id="tfidf-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Doughnut Chart -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-indigo-500"></i>
+                            키워드 속성 분포
+                        </h3>
+                        <p class="text-xs text-slate-500">추출된 핵심 토큰의 긍정/부정/속성 분류</p>
+                    </div>
+                    <div class="h-48 relative my-2">
+                        <canvas id="sentiment-chart"></canvas>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-center pt-2 border-t border-slate-100 text-xs">
+                        <div class="p-2 rounded-lg bg-emerald-50">
+                            <span class="block font-bold text-emerald-700 text-sm" id="positive-count-badge">0</span>
+                            <span class="text-emerald-600 font-medium text-[11px]">긍정 표현</span>
+                        </div>
+                        <div class="p-2 rounded-lg bg-rose-50">
+                            <span class="block font-bold text-rose-700 text-sm" id="negative-count-badge">0</span>
+                            <span class="text-rose-600 font-medium text-[11px]">부정/아쉬움</span>
+                        </div>
+                        <div class="p-2 rounded-lg bg-slate-100">
+                            <span class="block font-bold text-slate-700 text-sm" id="neutral-count-badge">0</span>
+                            <span class="text-slate-600 font-medium text-[11px]">일반 속성</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-content-table" class="hidden space-y-4">
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-4">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm">수치 산출 세부 데이터 매트릭스</h3>
+                        <p class="text-xs text-slate-500">단어별 총 빈도($TF$), 등장 리뷰 수($df$), 역수 가중치($N/df$) 세부 계산표</p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <select id="table-sort-select" onchange="sortAndRenderTable()" class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white">
+                            <option value="score-desc">최종 가중치 점수 높은 순</option>
+                            <option value="tf-desc">총 빈도(TF) 높은 순</option>
+                            <option value="idf-desc">역수 가중치(N/df) 높은 순</option>
+                            <option value="word-asc">단어 가나다 순</option>
+                        </select>
+                        <input type="text" id="table-search" oninput="filterTable()" placeholder="단어 검색..." class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 w-40 bg-white">
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl">
+                    <table class="w-full text-xs text-left text-slate-600">
+                        <thead class="bg-slate-50 text-slate-700 uppercase font-semibold border-b border-slate-200">
+                            <tr>
+                                <th scope="col" class="px-4 py-3">순위</th>
+                                <th scope="col" class="px-4 py-3">단어 (토큰)</th>
+                                <th scope="col" class="px-4 py-3">속성 분류</th>
+                                <th scope="col" class="px-4 py-3">총 빈도 ($TF$)</th>
+                                <th scope="col" class="px-4 py-3">등장 리뷰 수 ($df$)</th>
+                                <th scope="col" class="px-4 py-3">역수 가중치 ($N / df$)</th>
+                                <th scope="col" class="px-4 py-3 text-right">최종 점수 [$TF \times (N/df)$]</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tfidf-table-body" class="divide-y divide-slate-100">
+                            <!-- Table Rows Dynamic -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-content-reviews" class="hidden space-y-4">
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-3">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm">리뷰 문장 내 주요 키워드 하이라이트</h3>
+                        <p class="text-xs text-slate-500">도출된 핵심 단어들이 문장 속에서 색상별(긍정:초록, 부정:분홍, 일반:파랑)로 강조됩니다.</p>
+                    </div>
+                    <div id="active-filter-badge" class="hidden items-center gap-2 px-3 py-1 bg-sky-50 border border-sky-200 rounded-lg text-xs text-sky-800 font-medium">
+                        <span>해시태그 필터: <strong id="filter-keyword-name"></strong></span>
+                        <button onclick="clearHashtagFilter()" class="hover:text-sky-950 ml-1"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+
+                <div id="reviews-card-container" class="space-y-3">
+                    <!-- Dynamic Highlight Cards -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 py-6 mt-10 text-center text-xs text-slate-500 space-y-1">
+        <p class="font-medium text-slate-600">고등학교 1학년 수학 수학적 모델링 실생활 활용 프로젝트</p>
+        <p>계산 공식: $\text{TF-IDF} = \text{TF} \times \frac{N}{df}$ (단순 역수 모델)</p>
+    </footer>
+
+    <script>
+        const PRESETS = {
+            electronics: [
+                "음질이 선명하고 저음역 베이스 표현이 정말 만족스럽습니다. 노이즈 캔슬링 성능도 가격 대비 가성비 최고네요.",
+                "배송이 빠르게 당일 출고되어 기분 좋았어요. 패키지 보관용 케이스 디테일도 깔끔하고 예쁩니다.",
+                "음질과 디자인은 마음에 드는데 생각보다 무게가 약간 무겁고 30분 이상 착용하면 귀가 아파요.",
+                "노트북 연결 시 블루투스 끊김 현상이 간헐적으로 발생해서 인강 들을 때 답답했습니다.",
+                "배터리 성능이 너무 안 좋습니다. 완충하고 나가도 3시간만 쓰면 방전되어서 충전을 계속 해야 해요.",
+                "장시간 사용하면 이어폰 본체에 발열이 약간 느껴지고 가격대가 좀 비싼 편이라 아쉽습니다.",
+                "착용감이 편해서 오래 끼고 있어도 부담이 없고 통화 품질도 선명해서 대만족입니다.",
+                "소리 음질은 최고인데 충전 케이스 마감이 살짝 부실해서 뚜껑이 약간 건들거립니다."
+            ],
+            fashion: [
+                "핏이 깔끔하고 색감이 화면 그대로 예쁩니다. 겨울에 가볍게 걸치기 최고네요.",
+                "배송이 정말 빠르고 보온성이 뛰어나서 한겨울에도 엄청 따뜻하게 입을 수 있어요.",
+                "디자인과 착용감은 좋은데 정사이즈보다 사이즈가 조금 작게 나와서 한 치수 크게 시켜야 할 것 같아요.",
+                "소재가 생각보다 약간 까칠까칠해서 피부가 민감한 분들은 안쪽에 긴팔을 입어야 할 것 같습니다.",
+                "배송 지연이 4일이나 걸려서 당장 주말에 입으려고 했던 계획이 틀어져 짜증났습니다.",
+                "세탁 한 번 했는데 옷 소매 부분이 약간 줄어듦 현상이 나타나서 마감이 아쉽습니다.",
+                "가성비 대비 재질이 튼튼하고 보풀이 잘 안 생겨서 매우 만족스러운 구매였습니다.",
+                "주머니 깊이가 얕아서 핸드폰을 넣으면 자꾸 떨어지려고 하는 단점이 있습니다."
+            ],
+            food: [
+                "조리법이 너무 간단해서 요알못인 저도 15분 만에 근사한 파스타를 만들었어요. 재료도 신선하고 소스 맛이 레스토랑급입니다. 재구매 의사 100%입니다!",
+                "배송이 정말 빠르고 보냉 포장도 깔끔해서 기분이 좋았어요. 야채 상태가 아삭아삭 신선하고 육수 맛이 깊어서 온 가족이 아주 맛있게 먹었습니다.",
+                "손님 초대용으로 감바스 밀키트를 주문했는데 새우도 탱글탱글하고 양도 생각보다 푸짐해서 다들 만족해했습니다. 가성비 최고의 밀키트네요.",
+                "밀키트 구성품에 양념 비율이 딱 맞아서 간 맞추기가 너무 편해요. 바쁜 평일 퇴근 후에 빠르게 저녁 해결하기에 최고입니다.",
+                "고기 잡내도 전혀 안 나고 양념이 잘 베어있어서 밥도둑이 따로 없네요. 조리 순서 설명서가 친절하게 들어있어서 따라하기 쉽습니다.",
+                "맛은 무난하고 조리도 쉬운데 가격 대비 전체적인 양이 조금 적은 편이에요. 성인 2명이 먹기엔 고기나 사리를 추가해야 배가 부를 것 같아요.",
+                "야채 신선도는 아주 양호했으나 소스 간이 제 입맛에는 좀 짜서 물을 더 넣고 조리했습니다. 나트륨 조절 가이드가 있으면 더 좋겠네요.",
+                "아이들이 매운 걸 못 먹는데 양념이 생각보다 매콤해서 아이들용으로는 조금 힘들었어요. 매운맛 단계 표시가 크게 적혀있으면 좋겠습니다.",
+                "배송 중에 용기 안의 고기 핏물이 조금 새어 나와서 당황했습니다. 야채도 약간 숨이 죽어있어서 개별 포장에 신경을 더 써주시면 좋겠어요.",
+                "양념 맛이 너무 인위적이고 조미료 맛이 강하게 남아서 아쉬웠어요. 재료 자체는 나쁘지 않은데 소스 개선이 필요해 보입니다."
+            ],
+            // 100% Negative Dataset requested by user
+            bad_quality: [
+                "배송받자마자 박스를 뜯었는데 제품 상자가 파손되어 있고 내용 부품도 다 부서져서 도착했습니다. 고객센터 전화 연결도 안 되고 완전 최악입니다.",
+                "일주일 넘게 배송 지연이 되더니 막상 온 제품은 마감이 엉망이고 불쾌한 냄새가 너무 심해서 바로 버리고 싶네요. 절대 사지 마세요.",
+                "포장이 다 뜯어진 상태로 왔고 소스가 다 새어나와서 박스 전체가 오염되었습니다. 교환 환불 문의했더니 고객센터 응대가 불친절해서 기분만 망쳤습니다.",
+                "재질이 상상 이상으로 싸구려이고 한 번 조립하자마자 쉽게 부서집니다. 가격 대비 돈이 너무 아깝고 완전히 낚인 기분입니다.",
+                "설명서대로 사용하려고 개봉해보니 구성 재료가 완전히 변질되어 심한 악취가 났습니다. 품질 상태 점검도 안 하고 판매하나요?",
+                "구매하고 작동시킨 지 단 하루 만에 고장났습니다. AS 문의하니까 소비자 과실이라고 책임 회피하는데 정말 황당하고 짜증나네요.",
+                "광고 사진과 실물이 완전히 딴판입니다. 마감 처리가 허술해서 접착제 자국이 그대로 다 보입니다. 100% 환불 요청합니다.",
+                "배송 지연도 모자라 포장 상태 불량에 제품 결함, 불친절한 응대까지 최악의 구매 경험입니다. 주변에 절대 비추합니다."
+            ]
+        };
+
+        const DEFAULT_STOPWORDS = [
+            '진짜', '너무', '정말', '그냥', '아주', '엄청', '되게', '완전', '조금', '약간', 
+            '거의', '대박', '다시', '계속', '역시', '것', '수', '등', '이', '그', '저', 
+            '있어', '없어', '함', '등등', '있습니다', '해서', '하고', '같아요', '입니다', '까지',
+            '에는', '에서', '으로', '하여', '따라', '대한', '관한', '위해', '통해', '있는', '없는',
+            '것이', '것은', '것을', '것같습니다', '것같아요', '그리고', '하지만', '그래서', '때문'
+        ];
+
+        const PARTICLES = ['은', '는', '이', '가', '을', '를', '도', '에', '의', '로', '으로', '에서', '까지', '부터', '와', '과', '한테', '에게', '들', '만', '처럼', '하며', '해서', '하고', '이며', '이나', '나'];
+
+        const POSITIVE_MARKERS = ['좋', '우수', '뛰어', '대만족', '만족', '최고', '빠름', '빠르', '선명', '오래', '편한', '편하', '깔끔', '가성비', '추천', '강추', '짱짱', '친절', '착한', '훌륭', '따뜻', '신선', '푸짐', '예쁘', '아삭', '튼튼'];
+        const NEGATIVE_MARKERS = ['아쉽', '느림', '느리', '짧', '부족', '불편', '끊김', '끊겨', '먹통', '비쌈', '비싸', '아픔', '밀림', '나쁨', '별로', '불안정', '부실', '추운', '줄어', '짜서', '시들어', '핏물', '매콤', '인위적', '당황', '발열', '무겁', '방전', '건들', '지연', '짜증', '작게', '까칠', '답답', '단점', '파손', '부서', '최악', '망쳤', '싸구려', '악취', '고장', '황당', '환불', '비추', '불만', '불친절', '오염', '변질'];
+
+        let activeStopwords = new Set([...DEFAULT_STOPWORDS]);
+        let currentReviews = [];
+        let currentTFIDFModel = null;
+        let selectedHashtagFilter = null;
+        let tfidfChartInstance = null;
+        let sentimentChartInstance = null;
+
+        function trimKoreanParticle(word) {
+            if (!word || word.length <= 1) return word;
+            for (let p of PARTICLES) {
+                if (word.endsWith(p) && word.length - p.length >= 2) {
+                    return word.slice(0, word.length - p.length);
+                }
+            }
+            return word;
+        }
+
+        function preprocessText(text) {
+            const cleaned = text.replace(/[^\w\s가-힣]/g, ' ');
+            const rawTokens = cleaned.split(/\s+/).filter(t => t.length > 0);
+            
+            let tokens = [];
+            for (let token of rawTokens) {
+                let trimmed = trimKoreanParticle(token);
+                if (trimmed.length >= 2 && !activeStopwords.has(trimmed)) {
+                    tokens.push(trimmed);
+                }
+            }
+            return { tokens };
+        }
+
+        function calculateSimpleTFIDF(reviews) {
+            const N = reviews.length;
+            if (N === 0) return { terms: [], docTokens: [], numDocs: 0 };
+
+            const docTokensList = reviews.map(r => preprocessText(r.content).tokens);
+
+            const dfMap = {};
+            const totalTfMap = {};
+
+            docTokensList.forEach(tokens => {
+                const uniqueInDoc = new Set(tokens);
+
+                tokens.forEach(term => {
+                    totalTfMap[term] = (totalTfMap[term] || 0) + 1;
+                });
+
+                uniqueInDoc.forEach(term => {
+                    dfMap[term] = (dfMap[term] || 0) + 1;
+                });
+            });
+
+            const termsData = [];
+            Object.keys(dfMap).forEach(term => {
+                const df = dfMap[term];
+                const tf = totalTfMap[term];
+                
+                // High School Math logic: Simple Inverse IDF = N / df
+                const simpleIDF = N / df;
+                
+                // Final Score = TF * (N / df)
+                const finalScore = tf * simpleIDF;
+                
+                const category = classifyTermCategory(term);
+
+                termsData.push({
+                    term,
+                    tf,
+                    df,
+                    simpleIDF: simpleIDF,
+                    finalScore: finalScore,
+                    category
+                });
+            });
+
+            // Sort by Final Score Descending
+            termsData.sort((a, b) => b.finalScore - a.finalScore);
+
+            return {
+                terms: termsData,
+                docTokens: docTokensList,
+                numDocs: N
+            };
+        }
+
+        function classifyTermCategory(term) {
+            const lower = term.toLowerCase();
+            let isPos = POSITIVE_MARKERS.some(m => lower.includes(m));
+            let isNeg = NEGATIVE_MARKERS.some(m => lower.includes(m));
+
+            if (isPos && !isNeg) return 'positive';
+            if (isNeg && !isPos) return 'negative';
+            return 'feature';
+        }
+
+        function runAnalysis() {
+            if (currentReviews.length === 0) {
+                syncTextareaToReviews();
+            }
+
+            if (currentReviews.length === 0) {
+                displayEmptyState();
+                return;
+            }
+
+            currentTFIDFModel = calculateSimpleTFIDF(currentReviews);
+
+            // Update Header Stats
+            const totalN = currentReviews.length;
+            document.getElementById('stat-review-count').innerText = `${totalN}개`;
+            
+            const totalChars = currentReviews.reduce((acc, r) => acc + r.content.length, 0);
+            document.getElementById('stat-char-count').innerText = `${totalChars.toLocaleString()}자`;
+
+            const avgChar = totalN > 0 ? Math.round(totalChars / totalN) : 0;
+            document.getElementById('stat-avg-char').innerText = `${avgChar}자`;
+
+            document.getElementById('stat-stopword-count').innerText = `${activeStopwords.size}개`;
+
+            // Render Views
+            renderStopwordsUI();
+            renderHashtagsAndSummary(currentTFIDFModel);
+            renderCharts(currentTFIDFModel);
+            sortAndRenderTable();
+            renderHighlightedReviews(currentReviews, currentTFIDFModel);
+            renderSingleReviewsList();
+        }
+
+        function displayEmptyState() {
+            document.getElementById('hashtag-container').innerHTML = `<span class="text-xs text-slate-400">입력된 리뷰가 없습니다.</span>`;
+            document.getElementById('ai-summary-text').innerHTML = `입력된 리뷰 데이터가 없습니다. 상단의 샘플 버튼을 누르거나 직접 리뷰를 입력하세요.`;
+            document.getElementById('stat-review-count').innerText = `0개`;
+            document.getElementById('stat-char-count').innerText = `0자`;
+            document.getElementById('stat-avg-char').innerText = `0자`;
+            document.getElementById('overall-score-badge').innerText = `0.0 / 5.0`;
+        }
+
+        function renderStopwordsUI() {
+            const container = document.getElementById('stopword-tags-container');
+            container.innerHTML = '';
+
+            Array.from(activeStopwords).sort((a, b) => a.localeCompare(b, 'ko')).forEach(word => {
+                const badge = document.createElement('span');
+                badge.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white text-slate-700 border border-slate-300 shadow-xs hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 transition cursor-pointer';
+                badge.innerHTML = `${word} <i class="fa-solid fa-xmark text-[10px] text-slate-400 hover:text-rose-600"></i>`;
+                badge.onclick = () => removeStopword(word);
+                container.appendChild(badge);
+            });
+
+            document.getElementById('stat-stopword-count').innerText = `${activeStopwords.size}개`;
+        }
+
+        function addCustomStopword() {
+            const input = document.getElementById('stopword-input');
+            const val = input.value.trim();
+            if (!val) return;
+
+            const words = val.split(',').map(w => w.trim()).filter(w => w.length > 0);
+            words.forEach(w => activeStopwords.add(w));
+
+            input.value = '';
+            showToast(`${words.length}개 불용어 추가됨`);
+            runAnalysis();
+        }
+
+        function removeStopword(word) {
+            activeStopwords.delete(word);
+            runAnalysis();
+        }
+
+        function resetDefaultStopwords() {
+            activeStopwords = new Set([...DEFAULT_STOPWORDS]);
+            showToast('기본 불용어로 복원되었습니다.');
+            runAnalysis();
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('stopword-toast');
+            toast.innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2000);
+        }
+
+        function renderHashtagsAndSummary(model) {
+            if (!model || model.terms.length === 0) return;
+
+            const topTerms = model.terms.slice(0, 10);
+            const container = document.getElementById('hashtag-container');
+            container.innerHTML = '';
+
+            let posTerms = [];
+            let negTerms = [];
+            let featureTerms = [];
+
+            topTerms.forEach(item => {
+                let badgeStyle = '';
+                let iconHtml = '';
+
+                if (item.category === 'positive') {
+                    badgeStyle = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30';
+                    iconHtml = '<i class="fa-solid fa-thumbs-up text-[10px] mr-1 text-emerald-400"></i>';
+                    posTerms.push(item.term);
+                } else if (item.category === 'negative') {
+                    badgeStyle = 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30';
+                    iconHtml = '<i class="fa-solid fa-triangle-exclamation text-[10px] mr-1 text-rose-400"></i>';
+                    negTerms.push(item.term);
+                } else {
+                    badgeStyle = 'bg-sky-500/20 text-sky-200 border-sky-500/40 hover:bg-sky-500/30';
+                    iconHtml = '<i class="fa-solid fa-tag text-[10px] mr-1 text-sky-400"></i>';
+                    featureTerms.push(item.term);
+                }
+
+                const btn = document.createElement('button');
+                btn.className = `hashtag-badge inline-flex items-center px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer backdrop-blur-xs ${badgeStyle}`;
+                btn.innerHTML = `${iconHtml}#${item.term} <span class="ml-1.5 opacity-75 text-[10px]">(점수: ${item.finalScore.toFixed(1)})</span>`;
+                btn.onclick = () => filterByHashtag(item.term);
+                container.appendChild(btn);
+            });
+
+            // Calculate overall score & ratios
+            const avgRating = currentReviews.length > 0 
+                ? (currentReviews.reduce((acc, r) => acc + r.rating, 0) / currentReviews.length).toFixed(1)
+                : '0.0';
+
+            document.getElementById('overall-score-badge').innerText = `★ ${avgRating} / 5.0`;
+
+            let totalPos = 0, totalNeg = 0;
+            model.terms.forEach(t => {
+                if (t.category === 'positive') totalPos += t.tf;
+                if (t.category === 'negative') totalNeg += t.tf;
+            });
+            const totalSentiment = totalPos + totalNeg || 1;
+            const posPercent = Math.round((totalPos / totalSentiment) * 100);
+            const negPercent = 100 - posPercent;
+
+            document.getElementById('sentiment-ratio-text').innerText = `긍정 ${posPercent}% | 부정/아쉬움 ${negPercent}%`;
+
+            const summaryEl = document.getElementById('ai-summary-text');
+            const subtextEl = document.getElementById('ai-summary-subtext');
+
+            const topFeatStr = featureTerms.slice(0, 3).map(t => `#${t}`).join(' ');
+            const topPosStr = posTerms.slice(0, 3).map(t => `#${t}`).join(' ');
+            const topNegStr = negTerms.slice(0, 3).map(t => `#${t}`).join(' ');
+
+            let text = `리뷰 분석 결과, 본 상품은 <strong>${topFeatStr || '특징 키워드'}</strong> 항목에서 가장 높은 가중치가 도출되었습니다. `;
+            
+            if (posPercent >= 60) {
+                text += `<span class="text-emerald-300 font-bold">전반적으로 긍정 피드백이 매우 우세하며</span>, <strong>${topPosStr || '#만족'}</strong> 키워드의 가중치가 최상위권을 기록했습니다. `;
+            } else if (posPercent >= 40) {
+                text += `<span class="text-amber-300 font-bold">장단점이 함께 공존하는 평가입니다.</span> 장점 키워드(<strong>${topPosStr || '#만족'}</strong>)와 함께 아쉬운 점으로 <strong>${topNegStr || '#주의사항'}</strong> 가중치가 도출되었습니다. `;
+            } else {
+                text += `<span class="text-rose-300 font-bold">🚨 100% 최악의 품질 및 환불 요청 부정 피드백이 지배적입니다.</span> 특히 <strong>${topNegStr || '#최악 #환불요청'}</strong> 키워드의 역수 가중치가 극도로 높게 측정되었습니다. 구매 시 각별한 주의가 필요합니다!`;
+            }
+
+            if (negTerms.length > 0 && posPercent >= 40) {
+                text += `<br><span class="text-xs text-rose-200 opacity-90">⚠️ 구매 전 주의/아쉬운 핵심 키워드: <strong>${topNegStr}</strong></span>`;
+            }
+
+            summaryEl.innerHTML = text;
+            subtextEl.innerHTML = `전체 $N = ${model.numDocs}$개 리뷰 대상 단순 역수 IDF [$TF \\times (N / df)$] 연산 완료.`;
+        }
+
+        function renderCharts(model) {
+            const topTerms = model.terms.slice(0, 10);
+            
+            // 1. Bar Chart
+            const ctxBar = document.getElementById('tfidf-chart').getContext('2d');
+            if (tfidfChartInstance) tfidfChartInstance.destroy();
+
+            const labels = topTerms.map(t => t.term);
+            const scores = topTerms.map(t => parseFloat(t.finalScore.toFixed(2)));
+            const bgColors = topTerms.map(t => {
+                if (t.category === 'positive') return 'rgba(16, 185, 129, 0.85)';
+                if (t.category === 'negative') return 'rgba(244, 63, 94, 0.85)';
+                return 'rgba(2, 132, 199, 0.85)';
+            });
+
+            tfidfChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '최종 가중치 점수',
+                        data: scores,
+                        backgroundColor: bgColors,
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const t = topTerms[context.dataIndex];
+                                    return ` 점수: ${context.parsed.y} (TF: ${t.tf}, df: ${t.df}, N/df: ${t.simpleIDF.toFixed(2)})`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // 2. Doughnut Chart
+            let posCount = 0, negCount = 0, neuCount = 0;
+            model.terms.forEach(t => {
+                if (t.category === 'positive') posCount++;
+                else if (t.category === 'negative') negCount++;
+                else neuCount++;
+            });
+
+            document.getElementById('positive-count-badge').innerText = posCount;
+            document.getElementById('negative-count-badge').innerText = negCount;
+            document.getElementById('neutral-count-badge').innerText = neuCount;
+
+            const ctxDonut = document.getElementById('sentiment-chart').getContext('2d');
+            if (sentimentChartInstance) sentimentChartInstance.destroy();
+
+            sentimentChartInstance = new Chart(ctxDonut, {
+                type: 'doughnut',
+                data: {
+                    labels: ['긍정 표현', '부정/아쉬움', '일반 속성'],
+                    datasets: [{
+                        data: [posCount, negCount, neuCount],
+                        backgroundColor: ['#10b981', '#f43f5e', '#0284c7'],
+                        borderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        function sortAndRenderTable() {
+            if (!currentTFIDFModel) return;
+
+            const sortVal = document.getElementById('table-sort-select').value;
+            let terms = [...currentTFIDFModel.terms];
+
+            if (sortVal === 'score-desc') terms.sort((a, b) => b.finalScore - a.finalScore);
+            else if (sortVal === 'tf-desc') terms.sort((a, b) => b.tf - a.tf);
+            else if (sortVal === 'idf-desc') terms.sort((a, b) => b.simpleIDF - a.simpleIDF);
+            else if (sortVal === 'word-asc') terms.sort((a, b) => a.term.localeCompare(b.term, 'ko'));
+
+            const tbody = document.getElementById('tfidf-table-body');
+            tbody.innerHTML = '';
+
+            terms.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition';
+
+                let catBadge = '';
+                if (item.category === 'positive') catBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">긍정</span>';
+                else if (item.category === 'negative') catBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">부정/아쉬움</span>';
+                else catBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">일반</span>';
+
+                tr.innerHTML = `
+                    <td class="px-4 py-2.5 font-medium text-slate-400">${index + 1}</td>
+                    <td class="px-4 py-2.5 font-bold text-slate-800">${item.term}</td>
+                    <td class="px-4 py-2.5">${catBadge}</td>
+                    <td class="px-4 py-2.5 font-semibold text-slate-700">${item.tf}회</td>
+                    <td class="px-4 py-2.5">${item.df}개 문서</td>
+                    <td class="px-4 py-2.5 text-sky-700 font-bold">${item.simpleIDF.toFixed(2)}</td>
+                    <td class="px-4 py-2.5 text-right font-extrabold text-indigo-600">${item.finalScore.toFixed(2)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            filterTable();
+        }
+
+        function filterTable() {
+            const query = document.getElementById('table-search').value.toLowerCase();
+            const rows = document.querySelectorAll('#tfidf-table-body tr');
+            rows.forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(query) ? '' : 'none';
+            });
+        }
+
+        function renderHighlightedReviews(reviews, model) {
+            const container = document.getElementById('reviews-card-container');
+            container.innerHTML = '';
+
+            const topTermSet = new Set(model.terms.slice(0, 15).map(t => t.term));
+            let filteredReviews = reviews;
+
+            if (selectedHashtagFilter) {
+                filteredReviews = reviews.filter(r => r.content.includes(selectedHashtagFilter));
+            }
+
+            if (filteredReviews.length === 0) {
+                container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">선택한 키워드가 포함된 리뷰가 없습니다.</div>`;
+                return;
+            }
+
+            filteredReviews.forEach((review, idx) => {
+                const card = document.createElement('div');
+                card.className = 'p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition space-y-1.5 text-xs';
+
+                let highlightedContent = review.content;
+                const sortedTerms = Array.from(topTermSet).sort((a,b) => b.length - a.length);
+
+                sortedTerms.forEach(term => {
+                    if (highlightedContent.includes(term)) {
+                        const cat = classifyTermCategory(term);
+                        let highlightClass = 'bg-sky-100 text-sky-800 border-sky-200';
+                        if (cat === 'positive') highlightClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                        if (cat === 'negative') highlightClass = 'bg-rose-100 text-rose-800 border-rose-200';
+
+                        if (selectedHashtagFilter && term === selectedHashtagFilter) {
+                            highlightClass += ' ring-2 ring-sky-500 font-bold';
+                        }
+
+                        const regex = new RegExp(term, 'g');
+                        highlightedContent = highlightedContent.replace(regex, `<mark class="px-1.5 py-0.5 rounded border ${highlightClass}">${term}</mark>`);
+                    }
+                });
+
+                const stars = '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800">${review.author || '구매자 ' + (idx + 1)}</span>
+                            <span class="text-amber-500 text-[11px]">${stars} (${review.rating}점)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="editReviewItem(${idx})" class="text-slate-400 hover:text-sky-600 text-[11px]"><i class="fa-solid fa-pen"></i> 수정</button>
+                            <span class="text-slate-300">|</span>
+                            <span class="text-slate-400 text-[10px]">리뷰 #${idx + 1}</span>
+                        </div>
+                    </div>
+                    <p class="text-slate-700 leading-relaxed">${highlightedContent}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function syncTextareaToReviews() {
+            const text = document.getElementById('bulk-textarea').value.trim();
+            if (!text) {
+                currentReviews = [];
+                return;
+            }
+
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            currentReviews = lines.map((line, idx) => ({
+                id: idx + 1,
+                author: `구매자 ${idx + 1}`,
+                rating: 4,
+                content: line
+            }));
+        }
+
+        function handleBulkInputProcess() {
+            const text = document.getElementById('bulk-textarea').value;
+            const lines = text.split('\n').filter(l => l.trim().length > 0);
+            document.getElementById('bulk-line-count').innerText = `${lines.length} 줄 ($N = ${lines.length}$개)`;
+            
+            document.getElementById('stat-char-count').innerText = `${text.length.toLocaleString()}자`;
+            const avg = lines.length > 0 ? Math.round(text.length / lines.length) : 0;
+            document.getElementById('stat-avg-char').innerText = `${avg}자`;
+        }
+
+        function applyBulkTextToReviews() {
+            syncTextareaToReviews();
+            runAnalysis();
+        }
+
+        function handleSingleReviewSubmit(e) {
+            e.preventDefault();
+            const editIdx = parseInt(document.getElementById('editing-review-index').value);
+            const author = document.getElementById('single-author').value.trim();
+            const rating = parseInt(document.getElementById('single-rating').value);
+            const content = document.getElementById('single-content').value.trim();
+
+            if (!content) return;
+
+            if (editIdx >= 0 && editIdx < currentReviews.length) {
+                currentReviews[editIdx] = {
+                    id: currentReviews[editIdx].id,
+                    author: author || '익명',
+                    rating,
+                    content
+                };
+                document.getElementById('editing-review-index').value = "-1";
+                document.getElementById('single-submit-btn').innerHTML = '<i class="fa-solid fa-plus"></i> 리뷰 등록';
+            } else {
+                currentReviews.unshift({
+                    id: Date.now(),
+                    author: author || '익명',
+                    rating,
+                    content
+                });
+            }
+
+            syncReviewsToTextarea();
+
+            document.getElementById('single-author').value = '';
+            document.getElementById('single-content').value = '';
+
+            runAnalysis();
+        }
+
+        function editReviewItem(index) {
+            if (index < 0 || index >= currentReviews.length) return;
+            const item = currentReviews[index];
+            switchInputMode('single');
+            document.getElementById('editing-review-index').value = index;
+            document.getElementById('single-author').value = item.author;
+            document.getElementById('single-rating').value = item.rating;
+            document.getElementById('single-content').value = item.content;
+            document.getElementById('single-submit-btn').innerHTML = '<i class="fa-solid fa-check"></i> 수정 완료';
+        }
+
+        function syncReviewsToTextarea() {
+            const lines = currentReviews.map(r => r.content);
+            document.getElementById('bulk-textarea').value = lines.join('\n');
+            handleBulkInputProcess();
+        }
+
+        function renderSingleReviewsList() {
+            const container = document.getElementById('single-reviews-container');
+            document.getElementById('single-list-count').innerText = currentReviews.length;
+            container.innerHTML = '';
+
+            if (currentReviews.length === 0) {
+                container.innerHTML = `<div class="p-4 text-center text-slate-400 text-xs">등록된 리뷰가 없습니다.</div>`;
+                return;
+            }
+
+            currentReviews.forEach((r, idx) => {
+                const item = document.createElement('div');
+                item.className = 'p-2.5 rounded-lg border border-slate-200 bg-slate-50 flex justify-between items-center gap-2 text-xs';
+                item.innerHTML = `
+                    <div class="flex-grow space-y-0.5 overflow-hidden">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800">${r.author}</span>
+                            <span class="text-amber-500">${'★'.repeat(r.rating)}</span>
+                        </div>
+                        <p class="text-slate-600 truncate">${r.content}</p>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button onclick="editReviewItem(${idx})" class="text-sky-600 hover:text-sky-800 p-1.5 transition"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="deleteSingleReview(${idx})" class="text-slate-400 hover:text-rose-600 p-1.5 transition"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function deleteSingleReview(index) {
+            currentReviews.splice(index, 1);
+            syncReviewsToTextarea();
+            runAnalysis();
+        }
+
+        function clearAllData() {
+            currentReviews = [];
+            document.getElementById('bulk-textarea').value = '';
+            handleBulkInputProcess();
+            runAnalysis();
+        }
+
+        function loadPreset(key) {
+            if (!PRESETS[key]) return;
+            const data = PRESETS[key];
+            document.getElementById('bulk-textarea').value = data.join('\n');
+            
+            const titleMap = {
+                electronics: '🎧 [전자제품] 무선 이어폰',
+                fashion: '🧥 [패션/의류] 겨울 의류',
+                food: '🍕 [식품/밀키트] 밀키트 10선',
+                bad_quality: '😡 [100% 완전 부정] 최악의 품질 & 환불 모음'
+            };
+            document.getElementById('product-title-badge').innerText = titleMap[key] || '샘플 데이터';
+
+            // Assign default ratings
+            if (key === 'bad_quality') {
+                currentReviews = data.map((line, idx) => ({
+                    id: idx + 1,
+                    author: `불만고객 ${idx + 1}`,
+                    rating: 1, // 1 star rating for 100% negative
+                    content: line
+                }));
+            } else {
+                syncTextareaToReviews();
+            }
+
+            handleBulkInputProcess();
+            runAnalysis();
+        }
+
+        function filterByHashtag(term) {
+            selectedHashtagFilter = term;
+            document.getElementById('active-filter-badge').classList.remove('hidden');
+            document.getElementById('active-filter-badge').classList.add('flex');
+            document.getElementById('filter-keyword-name').innerText = `#${term}`;
+            
+            switchTab('reviews');
+            renderHighlightedReviews(currentReviews, currentTFIDFModel);
+        }
+
+        function clearHashtagFilter() {
+            selectedHashtagFilter = null;
+            document.getElementById('active-filter-badge').classList.add('hidden');
+            document.getElementById('active-filter-badge').classList.remove('flex');
+            renderHighlightedReviews(currentReviews, currentTFIDFModel);
+        }
+
+        function switchInputMode(mode) {
+            const bulkBtn = document.getElementById('input-mode-bulk-btn');
+            const singleBtn = document.getElementById('input-mode-single-btn');
+            const bulkBox = document.getElementById('input-mode-bulk');
+            const singleBox = document.getElementById('input-mode-single');
+
+            if (mode === 'bulk') {
+                bulkBtn.className = 'px-3.5 py-1.5 text-xs font-bold rounded-lg bg-sky-600 text-white transition flex items-center gap-1.5 shadow-xs';
+                singleBtn.className = 'px-3.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:bg-slate-200/70 transition flex items-center gap-1.5';
+                bulkBox.classList.remove('hidden');
+                singleBox.classList.add('hidden');
+            } else {
+                singleBtn.className = 'px-3.5 py-1.5 text-xs font-bold rounded-lg bg-sky-600 text-white transition flex items-center gap-1.5 shadow-xs';
+                bulkBtn.className = 'px-3.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:bg-slate-200/70 transition flex items-center gap-1.5';
+                singleBox.classList.remove('hidden');
+                bulkBox.classList.add('hidden');
+            }
+        }
+
+        function switchTab(tabName) {
+            const tabs = ['dashboard', 'table', 'reviews'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const content = document.getElementById(`tab-content-${t}`);
+                if (t === tabName) {
+                    btn.classList.add('border-sky-600', 'text-sky-600', 'font-semibold');
+                    btn.classList.remove('border-transparent', 'text-slate-500');
+                    content.classList.remove('hidden');
+                } else {
+                    btn.classList.remove('border-sky-600', 'text-sky-600', 'font-semibold');
+                    btn.classList.add('border-transparent', 'text-slate-500');
+                    content.classList.add('hidden');
+                }
+            });
+        }
+
+        window.onload = function() {
+            loadPreset('food');
+        };
+    </script>
+</body>
+</html>
